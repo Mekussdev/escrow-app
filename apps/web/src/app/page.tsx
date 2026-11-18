@@ -1,15 +1,15 @@
 import Link from 'next/link';
-import { apiGet, daysLeft, money, plural, timeLeftFraction, totals, type BountySummary } from '@/lib/api';
+import { apiGet, daysLeft, money, parseAmount, plural, timeLeftFraction, totals, type BountySummary } from '@/lib/api';
 
-type Search = { sort?: string; q?: string; minAmount?: string; cursor?: string };
+type Search = { sort?: string; q?: string; minAmount?: string; cursor?: string; token?: string; status?: string; repo?: string };
 
 export default async function Home({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const qs = new URLSearchParams();
-  for (const k of ['sort', 'q', 'cursor'] as const) if (sp[k]) qs.set(k, sp[k]!);
-  if (sp.minAmount && /^\d+(\.\d{1,7})?$/.test(sp.minAmount)) qs.set('minAmount', String(BigInt(Math.round(Number(sp.minAmount) * 1e7))));
+  for (const k of ['sort', 'q', 'cursor', 'token', 'status', 'repo'] as const) if (sp[k]) qs.set(k, sp[k]!);
+  if (sp.minAmount) { const amount = parseAmount(sp.minAmount); if (amount) qs.set('minAmount', amount); }
   const data = await apiGet<{ items: BountySummary[]; nextCursor: string | null }>(`/bounties?${qs}`);
-  const filtered = Boolean(sp.q || sp.minAmount);
+  const filtered = Boolean(sp.q || sp.minAmount || sp.token || sp.status || sp.repo);
   const items = data?.items ?? [];
 
   return (
@@ -25,7 +25,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           <dl className="stats">
             <div><dt>Open now</dt><dd>{items.length}{data.nextCursor ? '+' : ''}</dd></div>
             <div><dt>{data.nextCursor ? 'In escrow, first page' : 'In escrow'}</dt><dd>{totals(items)}</dd></div>
-            <div><dt>Fee on payout</dt><dd>3%</dd></div>
+            <div><dt>Fee on payout</dt><dd>{items[0] ? `${items[0].feeBps / 100}%` : '—'}</dd></div>
           </dl>
         )}
       </section>
@@ -37,10 +37,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
 
       <form className="filters" action="/" role="search">
         <input className="grow" name="q" placeholder="Search a repo or issue" defaultValue={sp.q} aria-label="Search" />
+        <input className="narrow" name="repo" placeholder="Repository" defaultValue={sp.repo} aria-label="Repository" />
         <input className="narrow" name="minAmount" inputMode="decimal" placeholder="Min amount" defaultValue={sp.minAmount} aria-label="Minimum amount" />
         <select name="sort" defaultValue={sp.sort ?? 'newest'} aria-label="Sort">
           <option value="newest">Newest</option><option value="highest">Highest</option><option value="ending">Ending soon</option>
         </select>
+        <input className="narrow" name="token" placeholder="Token id" defaultValue={sp.token} aria-label="Token" />
+        <select name="status" defaultValue={sp.status ?? 'OPEN'} aria-label="Status"><option value="OPEN">Open</option><option value="RELEASED">Paid</option><option value="REFUNDED">Refunded</option><option value="DISPUTED">Disputed</option></select>
         <button type="submit">Apply</button>
         {(filtered || sp.sort) && <Link href="/">Reset</Link>}
       </form>

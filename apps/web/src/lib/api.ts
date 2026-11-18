@@ -3,7 +3,7 @@ import { fromBaseUnits } from '@skillescrow/shared/src/amounts';
 const API = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 export interface BountySummary {
-  id: string; issueNumber: number; issueTitle: string; issueUrl: string; amount: string; token: string; status: string;
+  id: string; issueNumber: number; issueTitle: string; issueUrl: string; amount: string; token: string; status: string; feeBps: number;
   deadline: string; createdAt: string; repo: { fullName: string }; _count: { prs: number };
 }
 
@@ -26,6 +26,14 @@ export function symbolFor(token: string): string {
 }
 
 export const money = (amount: string, token: string) => `${fromBaseUnits(BigInt(amount), 7, 2)} ${symbolFor(token)}`;
+
+/** Decimal user input to token base units without lossy Number conversion. */
+export function parseAmount(value: string, decimals = 7): string | null {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
+  const [whole, fraction = ''] = value.split('.');
+  if (fraction.length > decimals) return null;
+  return (BigInt(whole!) * 10n ** BigInt(decimals) + BigInt((fraction + '0'.repeat(decimals)).slice(0, decimals))).toString();
+}
 
 export function daysLeft(deadline: string, now = Date.now()): string {
   const ms = new Date(deadline).getTime() - now;
